@@ -1,0 +1,288 @@
+MATCH (n)
+DETACH DELETE n;
+
+// 1st
+
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+CREATE(f:File {file_name : document.doc_os_metadata.file_name})
+MERGE (e:Extension{type:document.doc_os_metadata.file_extension})
+WITH f, e, document
+MERGE (f)-[:HAS_EXTENSION]->(e);
+
+
+// 2nd
+
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+MATCH(f:File)
+  WHERE f.file_name=document.doc_os_metadata.file_name
+WITH f, document
+  WHERE document.file_specific_metadata.Author IS NOT NULL
+MERGE (a:Author{name:document.file_specific_metadata.Author})
+WITH f, a, document
+MERGE (f)-[:HAS_AUTHOR]->(a);
+
+
+// 3rd
+
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+MATCH(f:File)
+  WHERE f.file_name=document.doc_os_metadata.file_name
+WITH f, document
+  WHERE document.file_specific_metadata.Company IS NOT NULL
+MERGE (c:Company{name:document.file_specific_metadata.Company})
+WITH f, c, document
+MERGE (f)-[:HAS_COMPANY]->(c);
+
+
+// 4th
+
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+MATCH(f:File)
+  WHERE f.file_name=document.doc_os_metadata.file_name
+WITH f, document
+  WHERE length(document.doc_content.attachments) <> 0
+UNWIND document.doc_content.attachments AS attachment
+MATCH(f2:File)
+  WHERE f2.file_name=attachment
+WITH f, f2
+MERGE (f)-[:HAS_ATTACHMENT]->(f2);
+
+
+// 5th
+
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+MATCH(f:File)
+  WHERE f.file_name=document.doc_os_metadata.file_name
+WITH f, document
+  WHERE document.asset IS NOT NULL
+MERGE (c:Asset{name:document.asset})
+WITH f, c, document
+MERGE (f)-[:BELONGS_TO]->(c);
+
+
+// 6th
+
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+MATCH(f:File)
+  WHERE f.file_name=document.doc_os_metadata.file_name
+WITH f, document
+  WHERE document.file_name_classification.best_matching_sub_category IS NOT NULL
+MERGE (sc:SubCategory{name:document.file_name_classification.best_matching_sub_category})
+MERGE (c:Category{name:document.file_name_classification.best_matching_category})
+WITH f, c, sc
+MERGE (f)-[:HAS_CATEGORY]->(sc)
+MERGE (sc)-[:BELONGS_TO]->(c);
+
+
+// 6 (2:nd part)
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+MATCH(f:File)
+  WHERE f.file_name=document.doc_os_metadata.file_name
+WITH f, document
+  WHERE document.content_text_classification.best_matching_sub_category IS NOT NULL
+MERGE (sc:SubCategory{name:document.content_text_classification.best_matching_sub_category})
+MERGE (c:Category{name:document.content_text_classification.best_matching_category})
+WITH f, c, sc
+MERGE (f)-[:GUESS_CATEGORY]->(sc)
+MERGE (sc)-[:BELONGS_TO]->(c);
+
+
+// 7th
+CREATE INDEX ON :Token(txt);
+CALL apoc.load.json("common_words.json") YIELD value as document
+unwind keys(document) as filename  with filename, document
+with filename, document[filename].common_words as words
+MATCH (f:File { file_name: filename })
+MERGE (f)-[:CONTAIN_TEXT]->(t:Text)
+WITH t, words
+UNWIND words as word
+MERGE (w:Token { txt: word[0]})
+MERGE (t)-[:HAS_TK { freq: word[1]}]->(w);
+
+
+// 8th
+
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+MATCH(f:File)
+  WHERE f.file_name=document.doc_os_metadata.file_name
+WITH f, document, range(0,length(document.doc_content.images)-1) as pos
+UNWIND apoc.coll.zip(pos, document.doc_content.images) AS image_with_pos
+CREATE(i:Image{pos:image_with_pos[0]})
+CREATE (f)-[:HAS_IMAGE]->(i)
+WITH i, image_with_pos[1] AS image
+  WHERE length(image.parsed_image.image_classes) <> 0
+UNWIND image.parsed_image.image_classes AS imageClass
+WITH i, imageClass
+  WHERE imageClass.name IS NOT NULL
+MERGE(ic:Class{name:imageClass.name})
+WITH i, ic, imageClass
+CREATE (i)-[:HAS_CLASS{confidence:imageClass.confidence}]->(ic);
+
+
+// 9 th
+
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+MATCH(f:File)
+  WHERE f.file_name=document.doc_os_metadata.file_name
+WITH f, document
+  WHERE document.file_specific_metadata.created IS NOT NULL
+UNWIND document.file_specific_metadata.created[..1] AS doc_date
+WITH f, date(split(doc_date,"T")[0]) AS date
+MERGE(d:Date{date:date})
+WITH f, d
+MERGE (f)-[:HAS_DATE]->(d);
+
+
+// 10 th
+
+CALL apoc.load.json("lda_words_v3.json") YIELD value as document
+UNWIND document.Topic_words_for_7_Topics AS topics
+CREATE (t:Topic{topic_id:topics[0]})
+SET t.words = topics[1];
+
+
+// 11 th
+
+CALL apoc.load.json("lda_and_keywords_v3.json") YIELD value as document
+UNWIND keys(document) AS file
+WITH file AS file_name, document[file].number_of_topics_7 AS topic_scores, range(0,6) as pos
+MATCH (f:File{file_name:file_name})
+UNWIND apoc.coll.zip(pos,topic_scores)  AS topic_score_with_pos
+MERGE (t:Topic{topic_id:"Topic_" + topic_score_with_pos[0] })
+MERGE (f)-[:HAS_TOPIC { score: topic_score_with_pos[1] }]->(t);
+
+
+// 12 th
+
+MATCH (a:Asset)
+SET a.name=toUpper(a.name);
+
+MATCH (a:Asset)
+  WHERE a.name CONTAINS "ÄLVEN"
+SET a:River
+REMOVE a:Asset;
+
+MATCH (r:River)
+  WHERE r.name = "GULLSPÅNGSÄLVEN"
+MATCH (a:Asset)
+  WHERE a.name = "ÅTORP"
+MERGE (a)-[:BELONGS_TO]->(r);
+
+
+// 13th
+
+CALL apoc.load.json("common_words_img.json") YIELD value as document
+UNWIND keys(document) AS file_name
+WITH file_name, document, keys(document[file_name]) as images
+UNWIND images AS image_pos
+MATCH (:File{file_name:file_name})-[:HAS_IMAGE]->(i:Image{pos:toInteger(image_pos)})
+MERGE (i)-[:CONTAIN_TEXT]->(t:Text)
+WITH document[file_name][image_pos] AS words, t
+UNWIND words as word
+MERGE (w:Token { txt: word[0]})
+MERGE (t)-[:HAS_TK { freq: word[1]}]->(w);
+
+
+// 14th
+LOAD CSV WITH HEADERS FROM "file:///plant_data.csv" as row
+MATCH (a:Asset)
+  WHERE toUpper(row.`Anläggning`) CONTAINS toUpper(a.name)
+SET a.name=row.`Anläggning`;
+
+LOAD CSV WITH HEADERS FROM "file:///plant_data.csv" as row
+MERGE (a:Asset{name:row.`Anläggning`})
+MERGE (r:River{name:row.`Vattendrag`})
+MERGE (c:Catchment {name:row.`huvudflodområde`})
+SET a.dam_id=row.`Ägares damm id`,
+a.max_retention=row.`Dämningsgräns DG`,
+a.min_retention=row.`Sänkningsgräns SG`,
+a.geo_reference=row.`Höjdsystem`,
+a.in_flow=row.`Högsta tillrinning`,
+a.in_dim100=row.`100-års flöde`,
+a.in_avg=row.`MQ`,
+a.out_capacity_rwl=row.`Max avbörd DG`,
+a.out_core=row.`Max avbörd ök tätk`,
+a.out_crest=row.`Max avbörd krön`
+MERGE (a)-[:BELONGS_TO]->(r)
+MERGE (r)-[:BELONGS_TO]->(c);
+
+
+// 15 th (op1)
+
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+MATCH(f:File)
+  WHERE f.file_name=document.doc_os_metadata.file_name
+WITH f, document
+  WHERE document.file_name_classification.dpm_category IS NOT NULL
+MERGE (sc:SubCategory{name:document.file_name_classification.dpm_sub_category})
+MERGE (c:Category{name:document.file_name_classification.dpm_category})
+WITH f, c, sc
+MERGE (f)-[:HAS_CATEGORY]->(sc)
+MERGE (sc)-[:BELONGS_TO]->(c);
+
+load csv from "file:///files.csv" as row FIELDTERMINATOR ' '
+CALL apoc.load.json("documents/" + row[0]) YIELD value as document
+MATCH(f:File)
+  WHERE f.file_name=document.doc_os_metadata.file_name
+WITH f, document
+  WHERE document.content_text_classification.dpm_sub_category IS NOT NULL
+MERGE (sc:SubCategory{name:document.content_text_classification.dpm_sub_category})
+MERGE (c:Category{name:document.content_text_classification.dpm_category})
+WITH f, c, sc
+MERGE (f)-[:GUESS_CATEGORY]->(sc)
+MERGE (sc)-[:BELONGS_TO]->(c);
+
+
+// 15 th (op2)
+
+MATCH (tk:Token)<-[:HAS_TK]-(:Text)<-[:CONTAIN_TEXT]-(w:File)
+  WHERE tolower(tk.txt) IN ["funktionskontroll", "övervakningsbehovsanalys", "overvakningsbehovsanalys", "systembeskrivning", "förstudie", "forstudie", "kdu"]
+MERGE (s:SubCategory{name:tolower(tk.txt)})
+MERGE (c:Category{name:"DPM"})
+MERGE (s)-[:BELONGS_TO]->(c)
+MERGE (w)-[:HAS_CATEGORY]->(s);
+
+
+MATCH (tk:Token)<-[:HAS_TK]-(:Text)<-[:CONTAIN_TEXT]-(:Image)<-[:HAS_IMAGE]-(w:File)
+  WHERE tolower(tk.txt) IN ["funktionskontroll", "övervakningsbehovsanalys", "overvakningsbehovsanalys", "systembeskrivning", "förstudie", "forstudie", "kdu"]
+MERGE (s:SubCategory{name:tolower(tk.txt)})
+MERGE (c:Category{name:"DPM"})
+MERGE (s)-[:BELONGS_TO]->(c)
+MERGE (w)-[:HAS_CATEGORY]->(s);
+
+MATCH (c:Category{name:"DPM"})--(sb:SubCategory)
+DETACH DELETE sb, c
+
+// Queries
+
+// Similarity
+
+MATCH (tk:Token)<-[:HAS_TK]-(:Text)<-[:CONTAIN_TEXT]-(w:File)
+WITH {item:id(w), categories: collect(id(tk))} as tokenData
+WITH collect(tokenData) as data
+CALL algo.similarity.jaccard.stream(data)
+YIELD item1, item2, count1, count2, intersection, similarity
+WITH algo.getNodeById(item1) as w1, algo.getNodeById(item2) as w2, count1, count2, intersection, similarity
+  WHERE w1 <> w2 and similarity > 0.95 and similarity < 1.1 and count1 > 2
+RETURN w1.file_name, w2.file_name, similarity, count1, count2
+MERGE (w1)-[:IS_SIMILAR {level:similarity}]->(w2)
+
+MATCH (tk:Token)<-[:HAS_TK]-(:Text)<-[:CONTAIN_TEXT]-(:Image)<-[:HAS_IMAGE]-(w:File)
+WITH {item:id(w), categories: collect(id(tk))} as tokenData
+WITH collect(tokenData) as data
+CALL algo.similarity.jaccard.stream(data)
+YIELD item1, item2, count1, count2, intersection, similarity
+WITH algo.getNodeById(item1) as w1, algo.getNodeById(item2) as w2, count1, count2, intersection, similarity
+  WHERE w1 <> w2 and similarity > 0.8 and similarity < 1.1 and count1 > 2
+RETURN w1.file_name, w2.file_name, similarity, count1, count2
+
