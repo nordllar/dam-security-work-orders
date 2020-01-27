@@ -1,5 +1,5 @@
-MATCH (n)
-DETACH DELETE n
+//MATCH (n)
+//DETACH DELETE n
 
 
 // Checking Maximo data
