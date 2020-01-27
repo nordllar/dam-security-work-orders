@@ -1,0 +1,63 @@
+// Load workorder documents
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///documents_load.csv" as row
+WITH row WHERE row.`Year` = '2019'
+MERGE (d:Document {name: row.`Name`})
+ON CREATE SET d.assetId = row.`Plant ID`;
+
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///documents_load.csv" as row
+WITH row WHERE row.`Year` = '2019'
+MATCH (d:Document)
+  WHERE row.`Name` = d.name
+SET d.title = row.`Title`;
+
+// Load year
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///documents_load.csv" as row
+WITH row WHERE row.`Year` = '2019'
+MERGE (y:Year {name: row.`Year`});
+
+// Document :HAS year
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///documents_load.csv" as row
+WITH row WHERE row.`Year` = '2019'
+MATCH (d:Document), (y:Year)
+  WHERE row.`Name` = d.name AND row.`Year` = y.name
+MERGE (d)-[:HAS]->(y)
+
+// Load Activity;
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///documents_load.csv" as row
+WITH row WHERE row.`Year` = '2019'
+MERGE (a:Activity {name: row.`Activity - SE`});
+
+// Document :HAS activity
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///documents_load.csv" as row
+WITH row WHERE row.`Year` = '2019'
+MATCH (d:Document), (a:Activity)
+  WHERE row.`Name` = d.name AND row.`Activity - SE` = a.name
+MERGE (d)-[:HAS]->(a);
+
+// Load System;
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///documents_load.csv" as row
+WITH row WHERE row.`Year` = '2019'
+MERGE (a:System {name: row.`System - SE`});
+
+// Document :HAS system
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///documents_load.csv" as row
+WITH row WHERE row.`Year` = '2019'
+MATCH (d:Document), (s:System)
+  WHERE row.`Name` = d.name AND row.`System - SE` = s.name
+MERGE (d)-[:HAS]->(s);
+
+// Document -> Asset
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///documents_load.csv" as row
+WITH row WHERE row.`Year` = '2019'
+MATCH (d:Document), (a:Asset)
+  WHERE row.`Asset ID` = a.assetId AND row.`Name` = d.name
+MERGE (d)-[:BELONGS_TO]->(a);
