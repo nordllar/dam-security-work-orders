@@ -1,0 +1,166 @@
+MATCH (n)
+DETACH DELETE n
+
+
+// Checking Maximo data
+WITH "file:///maximo_prod.json" AS url
+CALL apoc.load.json(url) YIELD value
+UNWIND value.rows AS rows
+WITH rows
+  WHERE rows.SITEID = 'HYSE' AND '2019-01-01' < rows.REPORTDATE  AND rows.REPORTDATE  < '2019-01-07' //AND rows.WORKTYPE = '220'
+//AND rows.`WORKORDERID` = '49185335'
+  //AND rows.WORKORDERID = '49207916'
+//RETURN rows
+//RETURN rows
+RETURN rows.DESCRIPTION, rows.WORKORDERID, rows.WONUM,
+       rows.SITEID, left(rows.JPNUM, 4) as JPNUM, rows.PMNUM ,
+      rows.MAXIMOTYPE, rows.STATUS, rows.LOCATION, left(rows.LOCATION, 17) as ASSETLOCATION, rows.WORKTYPE,
+       rows.SCHEDSTART, left(rows.ACTSTART, 10), rows.SCHEDFINISH, rows.ACTFINISH, rows.REPORTDATE;
+
+
+// START LOAD SEQUENCE
+
+// Loading worktypes code and description
+WITH "file:///worktype.json" AS url
+CALL apoc.load.json(url) YIELD value
+WITH value as rows
+MERGE (wt:Worktype {worktypeId: rows.code})
+  ON CREATE SET wt.name = rows.description;
+
+// Loading jpnum code and description
+WITH "file:///jpnum.json" AS url
+CALL apoc.load.json(url) YIELD value
+MERGE (pm:PmList {name: 'pmListan'})
+MERGE (j:Jpnum {name: value.code})
+  ON CREATE SET j.description = value.description
+MERGE (j)-[:IS_PART_OF]->(pm);
+
+// Loading Maximo workorder with status as label (limited load)
+WITH "file:///maximo_prod.json" AS url
+CALL apoc.load.json(url) YIELD value
+UNWIND value.rows AS rows
+WITH rows
+  WHERE rows.SITEID = 'HYSE' AND '2019-01-01' < rows.REPORTDATE  AND rows.REPORTDATE  < '2019-12-31' AND left(rows.LOCATION, 17) = 'SE.108.039.013DFS' //AND rows.WORKTYPE = '220'
+MERGE (wo:Workorder {workorderId: rows.WORKORDERID})
+ON CREATE SET wo.name = rows.DESCRIPTION, wo.location = rows.LOCATION, wo.assetlocation = left(rows.LOCATION, 17), wo.worktype = rows.WORKTYPE, wo.jpnum = left(rows.JPNUM, 4);
+//WITH wo, rows
+//CALL apoc.create.addLabels(wo, [rows.STATUS]) yield node
+//RETURN count(wo);
+
+// Adding dates as nodes to Maximo workorders
+// Maximo SCHEDSTART
+WITH "file:///maximo_prod.json" AS url
+CALL apoc.load.json(url) YIELD value
+UNWIND value.rows AS rows
+WITH rows WHERE rows.ACTSTART IS NOT NULL
+MATCH (wo:Workorder)
+  WHERE wo.workorderId = rows.`WORKORDERID`
+MERGE (sst:ActualStartDate {date: left(rows.ACTSTART, 10)})
+MERGE (wo)-[:HAS_DATE]-(sst);
+
+// Maximo SCHEDFINISH
+WITH "file:///maximo_prod.json" AS url
+CALL apoc.load.json(url) YIELD value
+UNWIND value.rows AS rows
+WITH rows WHERE rows.SCHEDFINISH IS NOT NULL
+MATCH (wo:Workorder)
+  WHERE wo.workorderId = rows.`WORKORDERID`
+MERGE (sst:ScheduledFinishDate {date: left(rows.SCHEDFINISH, 10)})
+MERGE (wo)-[:HAS_DATE]-(sst);
+
+// Maximo ACTUALSTART
+WITH "file:///maximo_prod.json" AS url
+CALL apoc.load.json(url) YIELD value
+UNWIND value.rows AS rows
+WITH rows WHERE rows.SCHEDSTART IS NOT NULL
+MATCH (wo:Workorder)
+  WHERE wo.workorderId = rows.`WORKORDERID`
+MERGE (sst:ScheduledStartDate {date: left(rows.SCHEDSTART, 10)})
+MERGE (wo)-[:HAS_DATE]-(sst);
+
+// Maximo ACTUALFINISH
+WITH "file:///maximo_prod.json" AS url
+CALL apoc.load.json(url) YIELD value
+UNWIND value.rows AS rows
+WITH rows WHERE rows.ACTFINISH IS NOT NULL
+MATCH (wo:Workorder)
+  WHERE wo.workorderId = rows.`WORKORDERID`
+MERGE (sst:ActualFinishDate {date: left(rows.ACTFINISH, 10)})
+MERGE (wo)-[:HAS_DATE]-(sst);
+
+// Connecting workorder with worktype
+MATCH (wo:Workorder), (wt:Worktype)
+  WHERE wo.worktype = wt.worktypeId
+MERGE (wo)-[:HAS_WORKTYPE]->(wt);
+
+// Connecting workorder to jpnum
+MATCH (wo:Workorder), (jp:Jpnum)
+  WHERE wo.jpnum = jp.name
+MERGE (wo)-[:HAS]->(jp);
+
+// Don't use this one
+// Connect workorders to asset
+//MATCH (wo:Workorder), (a:Asset)
+//  WHERE wo.assetlocation = a.assetId
+//MERGE (wo)-[:BELONGS_TO]->(a)
+
+//Use this instead
+// Connect workorders to asset
+MATCH (wo:Workorder), (a:Asset)
+  WHERE wo.location = a.assetId
+MERGE (wo)-[:BELONGS_TO]->(a);
+
+// Connect workorders to unit level
+MATCH (wo:Workorder), (u:Unit)
+  WHERE wo.location = u.unitId
+MERGE (wo)-[:BELONGS_TO]->(u);
+
+// Connect workorders to f1
+MATCH (wo:Workorder), (f1:FunctionLevel1)
+  WHERE wo.location = f1.functionId
+MERGE (wo)-[:BELONGS_TO]->(f1);
+
+// Connect workorders to f2
+MATCH (wo:Workorder), (f2:FunctionLevel2)
+  WHERE wo.location = f2.functionId
+MERGE (wo)-[:BELONGS_TO]->(f2);
+
+// Connect workorders to f3
+MATCH (wo:Workorder), (f3:FunctionLevel3)
+  WHERE wo.location = f3.functionId
+MERGE (wo)-[:BELONGS_TO]->(f3);
+
+// Connect workorders to f4
+MATCH (wo:Workorder), (f4:FunctionLevel4)
+  WHERE wo.location = f4.functionId
+MERGE (wo)-[:BELONGS_TO]->(f4);
+
+// Connect workorders to f5
+MATCH (wo:Workorder), (f5:FunctionLevel5)
+  WHERE wo.location = f5.functionId
+MERGE (wo)-[:BELONGS_TO]->(f5);
+
+// Connect workorders to f6
+MATCH (wo:Workorder), (f6:FunctionLevel6)
+  WHERE wo.location = f6.functionId
+MERGE (wo)-[:BELONGS_TO]->(f6);
+
+// Connect workorders to f7
+MATCH (wo:Workorder), (f7:FunctionLevel7)
+  WHERE wo.location = f7.functionId
+MERGE (wo)-[:BELONGS_TO]->(f7);
+
+// Connect workorders to f8
+MATCH (wo:Workorder), (f8:FunctionLevel8)
+  WHERE wo.location = f8.functionId
+MERGE (wo)-[:BELONGS_TO]->(f8);
+
+// Connect workorders to f9
+MATCH (wo:Workorder), (f9:FunctionLevel9)
+  WHERE wo.location = f9.functionId
+MERGE (wo)-[:BELONGS_TO]->(f9);
+
+
+
+
+

@@ -1,0 +1,1 @@
+CALL apoc.cypher.runFile("maximo-json-load")

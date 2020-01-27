@@ -1,0 +1,8 @@
+MATCH (a:Asset)<-[:BELONGS_TO]-(d:Document)-[:HAS]->(ac:Activity)
+//WHERE a.assetId = 'SE.108.039.013DFS'
+RETURN a.assetId, d.name, ac.name ORDER BY ac.name
+
+
+MATCH (d:ScheduledStartDate)<-[:HAS_DATE]-(wo:Workorder)-[:HAS]->(jp:Jpnum), (wo:Workorder)-[:HAS_WORKTYPE]->(wt:Worktype)
+  WHERE wo.assetlocation = 'SE.108.039.013DFS' AND wo.jpnum <> '7800'
+RETURN wo.workorderId, d.date, wo.name, wt.name, wo.jpnum, jp.name ORDER BY d.date

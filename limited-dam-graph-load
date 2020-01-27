@@ -1,0 +1,209 @@
+MATCH (n)
+DETACH DELETE n;
+
+// START
+
+// Loading country
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY' AND row.PARENT = 'SE_HYSE'
+MERGE (c:Country {name: row.PARENT});
+
+// Loading catchment areas and connecting them to SE_HYSE (7 areas)
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (c:Country)
+  WHERE c.name = row.PARENT
+MERGE (ca:Catchment {catchmentId: row.LOCATION})
+MERGE (ca)-[:LOCATED_IN]->(c);
+
+// Adding catchment names to catchmentId
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (ca:Catchment)
+  WHERE ca.catchmentId = row.LOCATION
+SET ca.name = row.DESCRIPTION;
+
+// Loading rivers and connecting them to catchment areas, loading only one river
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (ca:Catchment)
+  WHERE ca.catchmentId = row.PARENT AND row.PARENT = 'SE.108'
+MERGE (r:River {riverId: row.LOCATION})
+MERGE (r)-[:BELONGS_TO]->(ca);
+
+// Adding river names to riverId
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (r:River)
+  WHERE r.riverId = row.LOCATION
+SET r.name = row.DESCRIPTION;
+
+// Loading assets and connecting them to rivers
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (r:River)
+  WHERE r.riverId = row.PARENT //AND row.PARENT = 'SE.108.039'
+MERGE (a:Asset {assetId: row.LOCATION})
+MERGE (a)-[:BELONGS_TO]->(r);
+
+// Adding asset names to assetId
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (a:Asset)
+  WHERE a.assetId = row.LOCATION
+SET a.name = row.DESCRIPTION;
+
+// Adding label plant to asset
+MATCH (a:Asset)
+  WHERE a.name CONTAINS 'KRV'
+SET a:Plant;
+
+// Loading units connected to assets
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (a:Asset)
+  WHERE a.assetId = row.PARENT //AND row.PARENT = 'SE.108.039.013DFS'
+MERGE (u:Unit {unitId: row.LOCATION})
+MERGE (a)-[:HAS_UNIT]->(u);
+
+// Adding unit names to unitId
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (u:Unit)
+  WHERE u.unitId = row.LOCATION
+SET u.name = row.DESCRIPTION;
+
+// Loading functionLevel1 to unit
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (u:Unit)
+  WHERE u.unitId = row.PARENT
+MERGE (f1:FunctionLevel1 {functionId: row.LOCATION})
+MERGE (u)-[:HAS_FUNCTION]->(f1);
+
+// Adding function names to functionId for Level1
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (f:FunctionLevel1)
+  WHERE f.functionId = row.LOCATION
+SET f.name = row.DESCRIPTION;
+
+// Loading next function level - Level2
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (f1:FunctionLevel1)
+  WHERE f1.functionId = row.PARENT
+MERGE (f2:FunctionLevel2 {functionId: row.LOCATION})
+MERGE (f1)-[:HAS_FUNCTION]->(f2);
+
+// Adding f2 names
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (f2:FunctionLevel2)
+  WHERE f2.functionId = row.LOCATION
+SET f2.name = row.DESCRIPTION;
+
+// Loading next function level - Level3
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (f2:FunctionLevel2)
+  WHERE f2.functionId = row.PARENT
+MERGE (f3:FunctionLevel3 {functionId: row.LOCATION})
+MERGE (f2)-[:HAS_FUNCTION]->(f3);
+
+// Adding f3 names
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (f3:FunctionLevel3)
+  WHERE f3.functionId = row.LOCATION
+SET f3.name = row.DESCRIPTION;
+
+// Loading next function level - Level4
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (f3:FunctionLevel3)
+  WHERE f3.functionId = row.PARENT
+MERGE (f4:FunctionLevel4 {functionId: row.LOCATION})
+MERGE (f3)-[:HAS_FUNCTION]->(f4);
+
+// Adding f4 names
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (f4:FunctionLevel4)
+  WHERE f4.functionId = row.LOCATION
+SET f4.name = row.DESCRIPTION;
+
+// Loading next function level - Level5
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMAR
+Y'
+MATCH (f4:FunctionLevel4)
+  WHERE f4.functionId = row.PARENT
+MERGE (f5:FunctionLevel5 {functionId: row.LOCATION})
+MERGE (f4)-[:HAS_FUNCTION]->(f5);
+
+// Adding f5 names
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (f5:FunctionLevel5)
+  WHERE f5.functionId = row.LOCATION
+SET f5.name = row.DESCRIPTION;
+
+// Loading next function level - Level6
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (f5:FunctionLevel5)
+  WHERE f5.functionId = row.PARENT
+MERGE (f6:FunctionLevel6 {functionId: row.LOCATION})
+MERGE (f5)-[:HAS_FUNCTION]->(f6);
+
+// Adding f6 names
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (f6:FunctionLevel6)
+  WHERE f6.functionId = row.LOCATION
+SET f6.name = row.DESCRIPTION;
+
+// Loading next function level - Level7
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (f6:FunctionLevel6)
+  WHERE f6.functionId = row.PARENT
+MERGE (f7:FunctionLevel7 {functionId: row.LOCATION})
+MERGE (f6)-[:HAS_FUNCTION]->(f7);
+
+// Adding f7 names
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (f7:FunctionLevel7)
+  WHERE f7.functionId = row.LOCATION
+SET f7.name = row.DESCRIPTION;
+
+// Loading next function level - Level8
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///lochierarchy_load.csv" as row
+WITH row WHERE row.SYSTEMID = 'PRIMARY'
+MATCH (f7:FunctionLevel7)
+  WHERE f7.functionId = row.PARENT
+MERGE (f8:FunctionLevel8 {functionId: row.LOCATION})
+MERGE (f7)-[:HAS_FUNCTION]->(f8);
+
+// Adding f8 names
+USING PERIODIC COMMIT 1000
+LOAD CSV WITH HEADERS FROM "file:///locations_load.csv" as row
+MATCH (f8:FunctionLevel8)
+  WHERE f8.functionId = row.LOCATION
+SET f8.name = row.DESCRIPTION;
+
