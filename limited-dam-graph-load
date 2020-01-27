@@ -1,5 +1,9 @@
-MATCH (n)
-DETACH DELETE n;
+//MATCH (n)
+//DETACH DELETE n;
+
+// ********************************
+// Loading SE.108
+// ********************************
 
 // START
 
